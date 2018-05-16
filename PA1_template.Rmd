@@ -2,7 +2,9 @@
 title: "Reproducible Research Course Project 1"
 author: "Sheila Braun"
 date: "May 16, 2018"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 ```{r setup}
   library(knitr)
