@@ -1,0 +1,241 @@
+---
+title: "Reproducible Research Course Project 1"
+author: "Sheila Braun"
+date: "May 16, 2018"
+output: html_document
+---
+```{r setup}
+  library(knitr)
+  opts_chunk$set(fig.path = "C:/Users/Sheila/Dropbox/Data_Science_Classes/Reproducible Research/figures/") # corrected path
+```
+
+###Project Steps###
+
+####1. Read in the dataset.####
+
+We load in required library, set some global options, and read in the data to a dataframe called my usual default, "df." Then we have a look at the data set. 
+
+```{r getdata}
+options(digits = 2, scipen = 9999)
+library(chron)
+library(lattice)
+df <- read.csv("activity.csv", head = TRUE)
+head(df, 10)
+```
+
+####2. Do a little data prep.  ####
+
+- Format the dates in the dataframe.  
+
+```{r formatDates}
+df$date <- strptime(df$date, "%Y-%m-%d")
+```  
+
+- Create a vector of dates.
+
+```{r createDateVector}
+dates <- df$date
+```  
+
+- Create a vector of unique dates.  
+
+```{r createUniqueDateVector}
+uniqueDays <- unique(df$date)
+```  
+
+- Create a vector of unique intervals.   
+
+```{r createUniqueIntVector}
+uniqueInts <- unique(df$interval)
+```  
+
+- Calculate the total number of unique dates.  
+
+```{r calcDatesTot}
+totUniqueDays <- length(uniqueDays)
+```   
+
+- Calculate the total number of unique intervals.  
+
+```{r calcUniqueIntTot}
+totUniqueInts <- length(uniqueInts)
+```  
+
+- Create a list of unique days with their matching steps. That list contains what we need to calculate the total number of steps per day. 
+
+```{r createDayStepArray}
+stepsDay <- split(df$steps, dates$yday)
+```  
+ - Calculate the total number of steps per day.
+```{r calcTotStepsDay}
+totStepsDay <- sapply(stepsDay, sum, na.rm=TRUE) 
+```
+
+We have `r totUniqueDays` unique days and `r totUniqueInts` unique intervals. 
+
+####3. Have a look at the day list, then create a histogram of the total number of steps taken each day. #### 
+
+```{r histsteps}
+str(totStepsDay)
+hist(totStepsDay, main = "Histogram of Total Steps per Day",
+     xlab = "Steps per Day", ylab = "Frequency")
+
+## And just to satisfly my need for tidiness, make "interval" into a separate factor variable. ##
+
+df$factInt <- as.factor(df$interval)
+head(df$factInt)
+
+```
+
+####4. Next show the mean and median number of steps taken each day.####
+
+```{r computemnmd}
+mnsteps <- mean(totStepsDay, na.rm = TRUE)
+mdsteps <- median(totStepsDay, na.rm = TRUE)
+```
+- Mean total steps is `r mnsteps`.  
+- Median total steps is `r mdsteps`.
+
+####5. What is the average daily activity pattern? Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)####
+
+```{r timeseries}
+intData <- split(df$steps, df$interval)
+avgStepsInt <- sapply(intData, mean, na.rm = TRUE)
+plot(uniqueInts, avgStepsInt, type = "l",
+     main = "Time Series: Average Steps per Interval on a Given Day",
+     xlab = "Interval", ylab = "Steps")
+maxInt = max(df$interval)
+```
+
+People start out slow on most days and stay slow until about interval 500. Then they start moving around more, with rapidly increasing numbers of steps until a very high peak of more than 200 steps per interval at interval 835. After that peak, number of steps drops down to a range of steps between about 25 and 100 that people seem to maintain until about interval 1900, at which point activity decreases until it reaches 0 at interval `r maxInt`. 
+
+####6. Identify the 5-minute interval that, on average, contains the maximum number of steps####
+
+```{r findMax}
+maxIntDays <- max(avgStepsInt, na.rm=TRUE)
+maxIndex <- as.numeric(which(avgStepsInt == maxIntDays))
+maxInt <- uniqueInts[maxIndex]
+plot(uniqueInts, avgStepsInt, type = "l",
+     main = "Time Series: Maximum Steps per Interval on a Given Day",
+     xlab = "Interval", ylab = "Steps")
+abline(v=maxInt, col = "red", lwd = 2)
+```
+
+
+The maximum average numbers of steps happens at interval `r maxInt` on a given day.
+
+####7. Code to describe and show a strategy for imputing missing data.###
+
+
+The first question to answer is whether there is a pattern to the missing data that might suggest an appropriate way to impute the missing data. First, then, identify and pull out the missing cases and visualize them to see if there is any kind of pattern. 
+
+
+```{r IDMIss}
+missings <- df[!complete.cases(df$steps),]
+numMissing <- sum(is.na(df$steps))
+str(missings)
+plot(missings$date, missings$interval, ylab = "Interval Numbers", xlab = "Dates")
+```
+
+Looks like the `r numMissing` missing values are clustered on just a few days--but across all intervals for those days. Therefore, the means for those intervals should be good substitutions for the missing values. Now if I can only figure out where I put those means . . . .
+
+```{r calcMissing}
+intMnSteps <- with(df, tapply(steps, df$interval, mean, na.rm = TRUE)) ##Calculate the means
+missings$steps <- intMnSteps # Replace missing values
+numMissingMissings <- sum(is.na(missings$steps)) ## Check it. 
+```
+
+Good enough. There are now `r numMissingMissings` missing step values in what was a dataset made up entirely of step values. 
+
+Now put the what-used-to-be-missing data into the data frame that we're going to make next, which will be a dataset of all *non*missing step values in the original data set. My blood sugar must be getting low because I can't believe I just wrote that. I'm not even sure it makes sense. 
+
+####8. Create a date set with imputed values instead of missing values.####
+
+```{r doTheImpute}
+df2 <- na.omit(df) ## omit the missing values
+numMissingdf2 <- sum(is.na(df2$steps)) ## Check it
+df2 <- rbind(df2, missings)
+df2 <- df2[order(df2$date), ]
+totMissingAfterAllThat <- sum(is.na(df2$steps))
+```
+
+After creating a dataset with `r numMissingdf2` missing values in it, we put the two data sets together and check for missing values. There are `r totMissingAfterAllThat` of them. Excellent. 
+
+####9. Create a histogram of the total number of steps taken each day after missing values are imputed.####
+
+Recycle the default "df" dataframe name and reuse the code from above. 
+
+```{r recycleReuse}
+df <- df2
+df$date <- strptime(df$date, "%Y-%m-%d")
+dates <- df$date
+uniqueDays <- unique(df$date)
+uniqueInts <- unique(df$interval)
+totUniqueDays <- length(uniqueDays)
+totUniqueInts <- length(uniqueInts)
+steps <- split(df$steps, dates$yday)
+totStepsDay <- sapply(steps, sum, na.rm=TRUE)
+str(totStepsDay)
+hist(totStepsDay, main = "Total Steps per Day with Imputed Values for Missing",
+     xlab = "Steps per Day", ylab = "Frequency")
+```
+
+I like the shape of those data. 
+
+```{r newMnMd}
+df2mnsteps <- mean(totStepsDay, na.rm = TRUE)
+df2mdsteps <- median(totStepsDay, na.rm = TRUE)
+meandiff <- df2mnsteps - mnsteps
+meddiff <- df2mnsteps - mdsteps
+```
+- We *used* to have a mean of `r mnsteps`. Our new mean total steps is `r df2mnsteps`, a difference of `r meandiff`.   
+- Median total steps *was* `r mdsteps`. Now it's `r df2mdsteps`, the same as the mean.  That's a difference of `r meddiff`. The mean and the median are the same because we used the mean to replace missing the missing values. There are so many means with that exact value that the value became the median.  
+- Most importantly, the data look a lot more parametric.
+
+####10. Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends####
+
+First we mess around until the data are in the format we need for the analysis. Create a new variable with day-of-the-week information it, set it to 0 in all cases, then set it to 1 for weekdays. The remainder should be weekends, but actually I'm not thrilled with that logic. 
+
+We know the data set has no missing steps because we imputed the men for missing steps. So let's check for missing dates, just in case. 
+
+```{r checkMissingDates}
+missdate <- sum(is.na(df$date))
+```
+
+There are `r missdate` of them. 
+
+Good. We can use sloppy logic, which follows.
+
+
+```{r messAround}
+dates <- df$date
+df$wkdays <- dates$wday 
+summary(df$wkdays)
+df$isWeekend <- is.weekend(df$wkdays)
+summary(df$isWeekend)
+weekendDays <- sum(df$isWeekend)
+weekDays <- length(dates) - weekendDays
+```
+
+So we have `r weekDays` weekdays and `r weekendDays` weekend days. Sounds reasonable enough. 
+
+Make the weekday - weekend factor variable. 
+
+```{r makeDayTypeFactor}
+df$dayType <- ifelse(df$isWeekend == "FALSE", df$dayType <- "Weekday", df$dayType <- "Weekend Day")
+df$dayType <- as.factor(df$dayType)
+summary(df$dayType)
+```
+
+
+```{r stepsPerDay}
+stepsPerDay <- aggregate(steps ~ interval + dayType, data = df, mean)
+names(stepsPerDay) <- c("interval", "dayType", "steps")
+```
+
+```{r makeFacetedTimeSeriesPlot}
+xyplot(steps ~ interval | dayType, stepsPerDay, type = "l", layout = c(1, 2), 
+    xlab = "Interval", ylab = "Number of Steps")
+```
+
+
